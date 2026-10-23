@@ -133,9 +133,9 @@ These methods read and write the whole resource in one go. Streams do not make l
 
 | Call | Description |
 |---|---|
-| `ResourceSaver.Save(resource, path, flags)` | Save a resource to a file, creating parent folders. `SaveFlags.ChangePath` also assigns that file path to the resource. |
-| `ResourceSaver.SaveToString(resource)` | Export a resource as text. |
-| `ResourceSaver.SaveToStream(resource, stream)` | Write resource text to a stream, leaving the stream open. |
+| `ResourceSaver.Save(resource, path, flags)` | Save a resource to a file, creating parent folders. `SaveFlags.ChangePath` assigns that path to the resource; `BundleResources` embeds path-backed child resources; `RelativePaths` writes relative external references when possible. |
+| `ResourceSaver.SaveToString(resource, flags)` | Export a resource as text, optionally embedding path-backed child resources. |
+| `ResourceSaver.SaveToStream(resource, stream, flags)` | Write resource text to a stream, leaving the stream open. |
 | `ResourceLoader.Load<T>(path, cacheMode)` | Load a resource by path, including nested external resources. |
 | `ResourceLoader.LoadFromString<T>(text)` | Import resource text from a string. |
 | `ResourceLoader.LoadFromStream<T>(stream)` | Import resource text from a stream, leaving the stream open. |
@@ -149,7 +149,7 @@ These methods read and write the whole resource in one go. Streams do not make l
 
 - `Reuse` (default): return the existing instance for the path, if loaded.
 - `Ignore`: read the file again without changing the cache.
-- `Replace`: read the file again and replace the cached instance.
+- `Replace`: read the file again and copy its exported values into the cached instance if the resource class is unchanged; otherwise cache the new instance.
 
 Format errors throw `ResourceFormatException`, which includes a path when available and a 1-based line and column. It derives from `UniResException`. File-system errors use the standard `IOException` family.
 
@@ -157,6 +157,7 @@ Format errors throw `ResourceFormatException`, which includes a path when availa
 
 - `user://path/to/file` resolves under `ResourcePaths.UserDataRoot`, which defaults to the application's persistent data directory and is writable in builds.
 - Other paths are ordinary file-system paths, absolute or relative to the working directory.
+- A relative external-resource path is resolved relative to the file that contains the reference; absolute and `user://` paths are kept as written.
 - UniRes does not provide a `res://` scheme. A built Unity player does not have a writable project-assets directory.
 
 ## Supported exported types
@@ -193,6 +194,7 @@ When loading, fields absent from the file keep their C# defaults; file propertie
 
 - **Whole-resource serialization:** a file is parsed or written in one go. Large arrays work, but the whole resource is held in memory and text takes more space than a binary format.
 - **No Unity object references yet:** `Texture2D`, `Mesh`, `GameObject`, and other engine objects are not serializable by the current value format. They can be stored as separate files and referenced by application-defined data, but UniRes does not resolve Unity object references.
+- **Cache modes:** `Reuse`, `Ignore` and `Replace` are supported. Godot's deeper dependency-tree variants (`IGNORE_DEEP` and `REPLACE_DEEP`) are not implemented.
 - **No binary format yet:** files are text only; there is no compact binary counterpart.
 - **IL2CPP stripping:** UniRes accesses exported members through reflection. Preserve resource classes and exported members with `[UnityEngine.Scripting.Preserve]` or a `link.xml` when managed stripping could remove them.
 
