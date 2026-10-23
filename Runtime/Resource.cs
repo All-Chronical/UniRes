@@ -23,5 +23,24 @@ namespace UniRes
 
         /// <summary>True when this resource has no file of its own.</summary>
         public bool IsBuiltIn => string.IsNullOrEmpty(ResourcePath);
+
+        /// <summary>
+        /// Gives this resource a file path without saving it. Resources saved inside other
+        /// resources are then written as references to that path instead of being embedded, and
+        /// <see cref="ResourceLoader.Load{T}"/> on the path returns this instance.
+        /// </summary>
+        /// <exception cref="UniResException">The path is empty or unsupported.</exception>
+        public void TakeOverPath(string path)
+        {
+            // Validates the path (empty, unsupported scheme) before anything changes.
+            ResourcePaths.ToFileSystemPath(path);
+
+            string normalized = ResourcePaths.Normalize(path);
+            if (!IsBuiltIn)
+                ResourceCache.Remove(ResourcePath, this);
+
+            ResourcePath = normalized;
+            ResourceCache.Set(normalized, this);
+        }
     }
 }

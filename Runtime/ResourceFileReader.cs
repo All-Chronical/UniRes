@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 
 namespace UniRes
@@ -131,7 +132,7 @@ namespace UniRes
                 if (loaded == null || !expected.IsInstanceOfType(loaded))
                     throw new UniResException($"The file is not a {typeName}.");
             }
-            catch (UniResException ex)
+            catch (Exception ex) when (ex is UniResException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 throw new ResourceFormatException($"Could not load [ext_resource] '{id}' from '{path}': {ex.Message}", LineOf(sectionStart), ColumnOf(sectionStart));
             }
