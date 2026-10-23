@@ -1,0 +1,6 @@
+* text=auto
+*.cs text diff=csharp eol=lf
+*.meta text eol=lf
+*.asmdef text eol=lf
+*.json text eol=lf
+*.md text eol=lf

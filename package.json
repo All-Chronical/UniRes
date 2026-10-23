@@ -1,0 +1,17 @@
+{
+  "name": "com.allchronical.unires",
+  "displayName": "UniRes",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Godot-style custom resources for Unity: typed, nestable, text-serialized data containers that can be saved and loaded at runtime, not just in the Editor.",
+  "keywords": [
+    "resource",
+    "serialization",
+    "runtime",
+    "save",
+    "load"
+  ],
+  "author": {
+    "name": "All-Chronical"
+  }
+}
