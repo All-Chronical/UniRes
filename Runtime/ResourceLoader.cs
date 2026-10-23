@@ -14,7 +14,7 @@ namespace UniRes
         /// <summary>Read the file again and return a new instance, leaving the cache alone.</summary>
         Ignore,
 
-        /// <summary>Read the file again, and make the new instance the cached one.</summary>
+        /// <summary>Read the file again and update the cached instance in place when its class matches.</summary>
         Replace,
     }
 
@@ -45,11 +45,13 @@ namespace UniRes
         /// <summary>Loads the resource saved at <paramref name="path"/>, whatever its class.</summary>
         public static Resource Load(string path, CacheMode cacheMode = CacheMode.Reuse)
         {
-            string fileSystemPath = ResourcePaths.ToFileSystemPath(path);
             string key = ResourcePaths.Normalize(path);
+            string fileSystemPath = ResourcePaths.ToFileSystemPath(key);
 
             if (cacheMode == CacheMode.Reuse && ResourceCache.TryGet(key, out Resource cached))
                 return cached;
+
+            ResourceCache.TryGet(key, out Resource cachedForReplace);
 
             List<string> stack = loadingStack ?? (loadingStack = new List<string>());
             if (stack.Contains(key))
@@ -61,7 +63,7 @@ namespace UniRes
             Resource loaded;
             try
             {
-                loaded = ResourceFileReader.Read(text, FileLoader.Instance);
+                loaded = ResourceFileReader.Read(text, FileLoader.Instance, key);
             }
             catch (ResourceFormatException ex) when (string.IsNullOrEmpty(ex.Path))
             {
@@ -74,8 +76,17 @@ namespace UniRes
             }
 
             loaded.ResourcePath = key;
+
+            if (cacheMode == CacheMode.Replace
+                && cachedForReplace != null
+                && cachedForReplace.GetType() == loaded.GetType())
+            {
+                cachedForReplace.CopyFrom(loaded);
+                return cachedForReplace;
+            }
+
             if (cacheMode != CacheMode.Ignore)
-                ResourceCache.Set(key, loaded);
+                ResourceCache.TakeOver(key, loaded);
 
             return loaded;
         }
@@ -114,10 +125,11 @@ namespace UniRes
                 return LoadFromString(reader.ReadToEnd());
         }
 
-        /// <summary>True when a file exists at the path.</summary>
+        /// <summary>True when a file exists at the path or the path is already cached.</summary>
         public static bool Exists(string path)
         {
-            return File.Exists(ResourcePaths.ToFileSystemPath(path));
+            string key = ResourcePaths.Normalize(path);
+            return ResourceCache.Contains(key) || File.Exists(ResourcePaths.ToFileSystemPath(key));
         }
 
         /// <summary>

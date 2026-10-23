@@ -56,10 +56,113 @@ namespace UniRes
             return path;
         }
 
-        /// <summary>Makes paths comparable: forward slashes only, empty for null.</summary>
+        /// <summary>
+        /// Resolves an external resource path relative to the resource file that contains it,
+        /// unless it is already a user-scheme, URI-scheme, or absolute file-system path.
+        /// </summary>
+        internal static string ResolveReference(string path, string containingResourcePath)
+        {
+            if (string.IsNullOrEmpty(path))
+                return path;
+
+            string normalized = Normalize(path);
+            if (normalized.StartsWith(UserScheme, StringComparison.Ordinal)
+                || normalized.Contains("://")
+                || Path.IsPathRooted(path))
+            {
+                return normalized;
+            }
+
+            if (string.IsNullOrEmpty(containingResourcePath))
+                return normalized;
+
+            string container = Normalize(containingResourcePath);
+            if (container.StartsWith(UserScheme, StringComparison.Ordinal))
+            {
+                int lastSlash = container.LastIndexOf('/');
+                string directory = lastSlash >= UserScheme.Length
+                    ? container.Substring(UserScheme.Length, lastSlash - UserScheme.Length)
+                    : "";
+                return Normalize(UserScheme + (directory.Length == 0 ? "" : directory + "/") + normalized);
+            }
+
+            string absoluteContainer = Path.GetFullPath(ToFileSystemPath(container));
+            string absoluteDirectory = Path.GetDirectoryName(absoluteContainer);
+            return Normalize(Path.GetFullPath(Path.Combine(absoluteDirectory, path)));
+        }
+
+        /// <summary>Returns a path relative to the containing resource when both use the same root.</summary>
+        internal static string MakeReferencePath(string resourcePath, string containingPath, bool relative)
+        {
+            string resource = Normalize(resourcePath);
+            if (!relative || string.IsNullOrEmpty(containingPath))
+                return resource;
+
+            string container = Normalize(containingPath);
+            bool resourceIsUserPath = resource.StartsWith(UserScheme, StringComparison.Ordinal);
+            bool containerIsUserPath = container.StartsWith(UserScheme, StringComparison.Ordinal);
+
+            if (resourceIsUserPath && containerIsUserPath)
+            {
+                string[] source = resource.Substring(UserScheme.Length).Split('/');
+                string[] target = container.Substring(UserScheme.Length).Split('/');
+                int targetCount = Math.Max(0, target.Length - 1);
+                int common = 0;
+                while (common < source.Length && common < targetCount
+                    && string.Equals(source[common], target[common], StringComparison.Ordinal))
+                {
+                    common++;
+                }
+
+                var segments = new System.Collections.Generic.List<string>();
+                for (int i = common; i < targetCount; i++)
+                    segments.Add("..");
+                for (int i = common; i < source.Length; i++)
+                    segments.Add(source[i]);
+
+                return string.Join("/", segments);
+            }
+
+            if (resourceIsUserPath != containerIsUserPath)
+                return resource;
+
+            string absoluteResource = Path.GetFullPath(ToFileSystemPath(resource));
+            string absoluteContainer = Path.GetFullPath(ToFileSystemPath(container));
+            string directory = Path.GetDirectoryName(absoluteContainer);
+            return Normalize(Path.GetRelativePath(directory, absoluteResource));
+        }
+
+        /// <summary>Makes paths comparable: forward slashes and normalized user-scheme segments.</summary>
         internal static string Normalize(string path)
         {
-            return string.IsNullOrEmpty(path) ? "" : path.Replace('\\', '/');
+            if (string.IsNullOrEmpty(path))
+                return "";
+
+            string normalized = path.Replace('\\', '/');
+            if (!normalized.StartsWith(UserScheme, StringComparison.Ordinal))
+                return normalized;
+
+            string[] parts = normalized.Substring(UserScheme.Length).Split('/');
+            var segments = new System.Collections.Generic.List<string>();
+            foreach (string part in parts)
+            {
+                if (part.Length == 0 || part == ".")
+                    continue;
+
+                if (part == "..")
+                {
+                    if (segments.Count > 0 && segments[segments.Count - 1] != "..")
+                        segments.RemoveAt(segments.Count - 1);
+                    else
+                        segments.Add(part);
+                }
+                else
+                {
+                    segments.Add(part);
+                }
+            }
+
+            return UserScheme + string.Join("/", segments);
         }
     }
 }

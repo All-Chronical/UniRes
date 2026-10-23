@@ -186,11 +186,47 @@ namespace UniRes.Tests
             ResourceSaver.Save(new SampleResource { Health = 1 }, "user://a.res");
             var old = ResourceLoader.Load<SampleResource>("user://a.res");
 
-            ResourceSaver.Save(new SampleResource { Health = 2 }, "user://a.res");
+            ResourceSaver.Save(new SampleResource { Health = 2, ResourceName = "updated" }, "user://a.res");
             var replaced = ResourceLoader.Load<SampleResource>("user://a.res", CacheMode.Replace);
 
+            Assert.AreSame(old, replaced);
+            Assert.AreEqual(2, old.Health);
+            Assert.AreEqual("updated", old.ResourceName);
+            Assert.AreSame(old, ResourceLoader.Load<SampleResource>("user://a.res"));
+        }
+
+        [Test]
+        public void CacheModeReplaceRecreatesTheResourceWhenItsClassChanges()
+        {
+            ResourceSaver.Save(new SampleResource { Health = 1 }, "user://a.res");
+            var old = ResourceLoader.Load<SampleResource>("user://a.res");
+            ResourceSaver.Save(new TestAct { Count = 2 }, "user://a.res");
+
+            var replaced = ResourceLoader.Load<TestAct>("user://a.res", CacheMode.Replace);
+
             Assert.AreNotSame(old, replaced);
-            Assert.AreSame(replaced, ResourceLoader.Load<SampleResource>("user://a.res"));
+            Assert.IsTrue(old.IsBuiltIn);
+            Assert.AreSame(replaced, ResourceLoader.Load<TestAct>("user://a.res"));
+        }
+
+        [Test]
+        public void CachedResourcesCountAsExistingEvenWithoutAFile()
+        {
+            var resource = new SampleResource();
+            resource.TakeOverPath("user://not-written.res");
+
+            Assert.IsTrue(ResourceLoader.Exists("user://not-written.res"));
+        }
+
+        [Test]
+        public void UserPathsNormalizeDotSegmentsForTheCache()
+        {
+            ResourceSaver.Save(new SampleResource(), "user://folder/a.res");
+
+            var first = ResourceLoader.Load<SampleResource>("user://folder/a.res");
+            var second = ResourceLoader.Load<SampleResource>("user://folder/./child/../a.res");
+
+            Assert.AreSame(first, second);
         }
 
         [Test]
@@ -262,6 +298,18 @@ namespace UniRes.Tests
 
             Assert.AreSame(resource, ResourceLoader.Load<SampleResource>("user://two.res"));
             Assert.AreEqual(99, ResourceLoader.Load<SampleResource>("user://one.res").Health);
+        }
+
+        [Test]
+        public void TakingOverAnOccupiedPathDisplacesThePreviousCachedResource()
+        {
+            var previous = new SampleResource();
+            previous.TakeOverPath("user://occupied.res");
+            var replacement = new SampleResource();
+            replacement.TakeOverPath("user://occupied.res");
+
+            Assert.IsTrue(previous.IsBuiltIn);
+            Assert.AreSame(replacement, ResourceLoader.Load<SampleResource>("user://occupied.res"));
         }
 
         [Test]

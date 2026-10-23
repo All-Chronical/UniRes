@@ -39,6 +39,28 @@ namespace UniRes
             }
         }
 
+        /// <summary>Assigns a path to a resource, displacing any different cached resource at that path.</summary>
+        public static void TakeOver(string path, Resource resource)
+        {
+            lock (Gate)
+            {
+                if (Entries.TryGetValue(path, out WeakReference<Resource> weak)
+                    && weak.TryGetTarget(out Resource previous)
+                    && !ReferenceEquals(previous, resource)
+                    && string.Equals(previous.ResourcePath, path, StringComparison.Ordinal))
+                {
+                    previous.ResourcePath = "";
+                }
+
+                Entries[path] = new WeakReference<Resource>(resource);
+            }
+        }
+
+        public static bool Contains(string path)
+        {
+            return TryGet(path, out _);
+        }
+
         /// <summary>Forgets a path, but only if it currently maps to this exact instance.</summary>
         public static void Remove(string path, Resource resource)
         {

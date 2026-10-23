@@ -15,24 +15,26 @@ namespace UniRes
     {
         private readonly TextScanner scanner;
         private readonly IExternalResourceLoader loader;
+        private readonly string sourcePath;
         private readonly Dictionary<string, Resource> externals = new Dictionary<string, Resource>(StringComparer.Ordinal);
         private readonly Dictionary<string, Resource> embedded = new Dictionary<string, Resource>(StringComparer.Ordinal);
 
-        private ResourceFileReader(string text, IExternalResourceLoader loader)
+        private ResourceFileReader(string text, IExternalResourceLoader loader, string sourcePath)
         {
             scanner = new TextScanner(text);
             this.loader = loader;
+            this.sourcePath = sourcePath;
         }
 
         /// <exception cref="ResourceFormatException">The text is not a valid UniRes file.</exception>
-        public static Resource Read(string text, IExternalResourceLoader loader)
+        public static Resource Read(string text, IExternalResourceLoader loader, string sourcePath = null)
         {
             if (text == null)
                 throw new ArgumentNullException(nameof(text));
             if (loader == null)
                 throw new ArgumentNullException(nameof(loader));
 
-            return new ResourceFileReader(text, loader).ReadAll();
+            return new ResourceFileReader(text, loader, sourcePath).ReadAll();
         }
 
         Resource IResourceReferenceResolver.Resolve(ResourceRef reference)
@@ -127,7 +129,8 @@ namespace UniRes
             try
             {
                 Type expected = ResourceRegistry.FindType(typeName);
-                loaded = loader.Load(path, expected);
+                string resolvedPath = ResourcePaths.ResolveReference(path, sourcePath);
+                loaded = loader.Load(resolvedPath, expected);
 
                 if (loaded == null || !expected.IsInstanceOfType(loaded))
                     throw new UniResException($"The file is not a {typeName}.");
