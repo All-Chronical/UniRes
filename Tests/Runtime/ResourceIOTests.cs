@@ -350,6 +350,56 @@ namespace UniRes.Tests
         }
 
         [Test]
+        public void BundleResourcesEmbedsPathBackedResources()
+        {
+            var act = new TestAct { Count = 7 };
+            ResourceSaver.Save(act, "user://films/acts/one.chact", SaveFlags.ChangePath);
+            var take = new TestTake { Featured = act };
+
+            ResourceSaver.Save(take, "user://films/take.chtk", SaveFlags.BundleResources);
+            string text = File.ReadAllText(OnDisk("films/take.chtk"));
+            ResourceLoader.ClearCache();
+            var loaded = ResourceLoader.Load<TestTake>("user://films/take.chtk");
+
+            StringAssert.DoesNotContain("[ext_resource", text);
+            StringAssert.Contains("[sub_resource", text);
+            Assert.AreEqual(7, loaded.Featured.Count);
+            Assert.IsTrue(loaded.Featured.IsBuiltIn);
+        }
+
+        [Test]
+        public void RelativePathsFlagWritesPathsRelativeToTheSavedResource()
+        {
+            var act = new TestAct { Count = 7 };
+            ResourceSaver.Save(act, "user://films/acts/one.chact", SaveFlags.ChangePath);
+            var take = new TestTake { Featured = act };
+
+            ResourceSaver.Save(take, "user://films/take.chtk", SaveFlags.RelativePaths);
+            string text = File.ReadAllText(OnDisk("films/take.chtk"));
+            ResourceLoader.ClearCache();
+            var loaded = ResourceLoader.Load<TestTake>("user://films/take.chtk");
+
+            StringAssert.Contains("path=\"acts/one.chact\"", text);
+            Assert.AreEqual(7, loaded.Featured.Count);
+            Assert.AreEqual("user://films/acts/one.chact", loaded.Featured.ResourcePath);
+        }
+
+        [Test]
+        public void RelativeExternalPathsResolveFromTheContainingResourceFile()
+        {
+            ResourceSaver.Save(new TestAct { Count = 7 }, "user://films/acts/one.chact");
+            File.WriteAllText(OnDisk("films/take.chtk"),
+                "[unires format=1 type=\"TestTake\"]\n" +
+                "[ext_resource type=\"TestAct\" path=\"acts/one.chact\" id=\"1\"]\n" +
+                "[resource]\nFeatured = ExtResource(\"1\")\n");
+
+            var take = ResourceLoader.Load<TestTake>("user://films/take.chtk");
+
+            Assert.AreEqual(7, take.Featured.Count);
+            Assert.AreEqual("user://films/acts/one.chact", take.Featured.ResourcePath);
+        }
+
+        [Test]
         public void TwoFilesReferencingTheSameFileShareOneInstance()
         {
             var shared = new TestAct { Count = 1 };

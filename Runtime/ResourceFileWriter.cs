@@ -17,6 +17,8 @@ namespace UniRes
 
         private readonly Resource root;
         private readonly string savePath;
+        private readonly bool bundleResources;
+        private readonly bool relativePaths;
 
         private readonly Dictionary<Resource, string> subIds = new Dictionary<Resource, string>(new ReferenceComparer());
         private readonly HashSet<Resource> inProgress = new HashSet<Resource>(new ReferenceComparer());
@@ -26,10 +28,12 @@ namespace UniRes
         private readonly Dictionary<string, string> extIdsByPath = new Dictionary<string, string>(StringComparer.Ordinal);
         private readonly List<string> extLines = new List<string>();
 
-        private ResourceFileWriter(Resource root, string savePath)
+        private ResourceFileWriter(Resource root, string savePath, bool bundleResources, bool relativePaths)
         {
             this.root = root;
             this.savePath = ResourcePaths.Normalize(savePath);
+            this.bundleResources = bundleResources;
+            this.relativePaths = relativePaths;
         }
 
         /// <param name="root">Resource to write.</param>
@@ -37,12 +41,12 @@ namespace UniRes
         /// Path the text will be saved to, or empty when it is not going to a file. A nested resource
         /// that already has this path is embedded rather than referenced.
         /// </param>
-        public static string Write(Resource root, string savePath)
+        public static string Write(Resource root, string savePath, bool bundleResources = false, bool relativePaths = false)
         {
             if (root == null)
                 throw new ArgumentNullException(nameof(root));
 
-            return new ResourceFileWriter(root, savePath).Build();
+            return new ResourceFileWriter(root, savePath, bundleResources, relativePaths).Build();
         }
 
         private string Build()
@@ -80,7 +84,8 @@ namespace UniRes
                 throw new UniResException($"A {resource.GetType().Name} contains itself (directly or through other resources). Resources must not form a loop.");
             }
 
-            bool hasOwnFile = !resource.IsBuiltIn
+            bool hasOwnFile = !bundleResources
+                && !resource.IsBuiltIn
                 && !string.Equals(ResourcePaths.Normalize(resource.ResourcePath), savePath, StringComparison.Ordinal);
 
             return hasOwnFile ? ReferenceExternal(resource) : ReferenceEmbedded(resource);
@@ -88,13 +93,14 @@ namespace UniRes
 
         private string ReferenceExternal(Resource resource)
         {
-            string path = resource.ResourcePath;
+            string resourcePath = ResourcePaths.Normalize(resource.ResourcePath);
 
-            if (!extIdsByPath.TryGetValue(path, out string id))
+            if (!extIdsByPath.TryGetValue(resourcePath, out string id))
             {
                 id = (extIdsByPath.Count + 1).ToString();
-                extIdsByPath[path] = id;
+                extIdsByPath[resourcePath] = id;
 
+                string path = ResourcePaths.MakeReferencePath(resourcePath, savePath, relativePaths);
                 var sb = new StringBuilder("[ext_resource type=");
                 VariantWriter.AppendQuoted(sb, ResourceRegistry.GetTypeName(resource.GetType()));
                 sb.Append(" path=");
