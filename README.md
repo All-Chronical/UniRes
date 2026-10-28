@@ -190,12 +190,17 @@ When loading, fields absent from the file keep their C# defaults; file propertie
 - Shared references remain shared: a resource referenced in more than one place is stored once per file.
 - A class in an assembly that references `UniRes.Runtime` is discovered automatically. Otherwise, register it at startup with `ResourceRegistry.Register<T>()` or `ResourceRegistry.RegisterAssembly(...)`.
 
+## Formats: Text and Binary
+
+UniRes supports two formats:
+- **Text format (`.tres` / default):** Godot-style human-readable sections (`[sub_resource]`, `[ext_resource]`).
+- **Binary format (`.res` / `SaveFlags.Binary`):** High-performance compact binary format (`UNRES\x01` magic header) with direct binary encoding of arrays and floats. `ResourceLoader` automatically detects whether a file or stream is text or binary on load.
+
 ## Limits
 
-- **Whole-resource serialization:** a file is parsed or written in one go. Large arrays work, but the whole resource is held in memory and text takes more space than a binary format.
+- **Whole-resource serialization:** a file is parsed or written in one go. Large arrays work, but the whole resource is held in memory during save/load.
 - **No Unity object references yet:** `Texture2D`, `Mesh`, `GameObject`, and other engine objects are not serializable by the current value format. They can be stored as separate files and referenced by application-defined data, but UniRes does not resolve Unity object references.
 - **Cache modes:** `Reuse`, `Ignore` and `Replace` are supported. Godot's deeper dependency-tree variants (`IGNORE_DEEP` and `REPLACE_DEEP`) are not implemented.
-- **No binary format yet:** files are text only; there is no compact binary counterpart.
 - **IL2CPP stripping:** UniRes accesses exported members through reflection. Preserve resource classes and exported members with `[UnityEngine.Scripting.Preserve]` or a `link.xml` when managed stripping could remove them.
 
 ## Tests

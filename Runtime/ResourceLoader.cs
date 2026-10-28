@@ -57,13 +57,14 @@ namespace UniRes
             if (stack.Contains(key))
                 throw new UniResException($"'{key}' refers to itself through its [ext_resource] sections: {string.Join(" -> ", stack)} -> {key}.");
 
-            string text = File.ReadAllText(fileSystemPath, Utf8);
-
             stack.Add(key);
             Resource loaded;
             try
             {
-                loaded = ResourceFileReader.Read(text, FileLoader.Instance, key);
+                using (var stream = File.OpenRead(fileSystemPath))
+                {
+                    loaded = LoadFromStreamInternal(stream, FileLoader.Instance, key);
+                }
             }
             catch (ResourceFormatException ex) when (string.IsNullOrEmpty(ex.Path))
             {
@@ -109,7 +110,23 @@ namespace UniRes
             return ResourceFileReader.Read(text, FileLoader.Instance);
         }
 
-        /// <summary>Loads a resource from a stream containing UniRes text (UTF-8). The stream is left open.</summary>
+        /// <summary>Loads a resource from a byte array containing binary or UTF-8 text UniRes data.</summary>
+        public static T LoadFromBytes<T>(byte[] bytes) where T : Resource
+        {
+            return CastTo<T>(LoadFromBytes(bytes), "the bytes");
+        }
+
+        /// <inheritdoc cref="LoadFromBytes{T}"/>
+        public static Resource LoadFromBytes(byte[] bytes)
+        {
+            if (bytes == null)
+                throw new ArgumentNullException(nameof(bytes));
+
+            using (var ms = new MemoryStream(bytes))
+                return LoadFromStreamInternal(ms, FileLoader.Instance, null);
+        }
+
+        /// <summary>Loads a resource from a stream containing binary or UTF-8 text UniRes data. The stream is left open.</summary>
         public static T LoadFromStream<T>(Stream stream) where T : Resource
         {
             return CastTo<T>(LoadFromStream(stream), "the stream");
@@ -121,8 +138,47 @@ namespace UniRes
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
+            return LoadFromStreamInternal(stream, FileLoader.Instance, null);
+        }
+
+        private static readonly byte[] BinaryMagic = new byte[] { (byte)'U', (byte)'N', (byte)'R', (byte)'E', (byte)'S' };
+
+        internal static Resource LoadFromStreamInternal(Stream stream, IExternalResourceLoader loader, string sourcePath)
+        {
+            if (!stream.CanSeek)
+            {
+                var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                ms.Position = 0;
+                stream = ms;
+            }
+
+            long startPos = stream.Position;
+            byte[] header = new byte[BinaryMagic.Length];
+            int read = stream.Read(header, 0, header.Length);
+
+            if (read == BinaryMagic.Length && MatchesMagic(header))
+            {
+                stream.Position = startPos;
+                return ResourceBinaryReader.Read(stream, loader, sourcePath);
+            }
+
+            stream.Position = startPos;
             using (var reader = new StreamReader(stream, Utf8, true, 4096, true))
-                return LoadFromString(reader.ReadToEnd());
+            {
+                string text = reader.ReadToEnd();
+                return ResourceFileReader.Read(text, loader, sourcePath);
+            }
+        }
+
+        private static bool MatchesMagic(byte[] header)
+        {
+            for (int i = 0; i < BinaryMagic.Length; i++)
+            {
+                if (header[i] != BinaryMagic[i])
+                    return false;
+            }
+            return true;
         }
 
         /// <summary>True when a file exists at the path or the path is already cached.</summary>

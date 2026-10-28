@@ -21,6 +21,9 @@ namespace UniRes
 
         /// <summary>Write external paths relative to the resource being saved when possible.</summary>
         RelativePaths = 4,
+
+        /// <summary>Save as a compact binary UniRes file rather than text.</summary>
+        Binary = 8,
     }
 
     /// <summary>
@@ -29,9 +32,9 @@ namespace UniRes
     /// </summary>
     /// <remarks>
     /// Saving writes the resource and everything embedded in it. Resources that already have their
-    /// own path are only referenced, not saved again: save those yourself first. The text is built
-    /// completely before any file is touched, so a resource that cannot be saved never damages an
-    /// existing file.
+    /// own path are only referenced, not saved again: save those yourself first. The text or binary
+    /// payload is built completely before any file is touched, so a resource that cannot be saved never
+    /// damages an existing file.
     /// </remarks>
     public static class ResourceSaver
     {
@@ -44,18 +47,34 @@ namespace UniRes
             if (resource == null)
                 throw new ArgumentNullException(nameof(resource));
 
-            string fileSystemPath = ResourcePaths.ToFileSystemPath(path);
-            string text = ResourceFileWriter.Write(
-                resource,
-                path,
-                (flags & SaveFlags.BundleResources) != 0,
-                (flags & SaveFlags.RelativePaths) != 0);
+            bool isBinary = (flags & SaveFlags.Binary) != 0
+                || (path != null && path.EndsWith(".res", StringComparison.OrdinalIgnoreCase));
 
+            string fileSystemPath = ResourcePaths.ToFileSystemPath(path);
             string directory = Path.GetDirectoryName(Path.GetFullPath(fileSystemPath));
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
 
-            File.WriteAllText(fileSystemPath, text, Utf8);
+            if (isBinary)
+            {
+                byte[] bytes = ResourceBinaryWriter.Write(
+                    resource,
+                    path,
+                    (flags & SaveFlags.BundleResources) != 0,
+                    (flags & SaveFlags.RelativePaths) != 0);
+
+                File.WriteAllBytes(fileSystemPath, bytes);
+            }
+            else
+            {
+                string text = ResourceFileWriter.Write(
+                    resource,
+                    path,
+                    (flags & SaveFlags.BundleResources) != 0,
+                    (flags & SaveFlags.RelativePaths) != 0);
+
+                File.WriteAllText(fileSystemPath, text, Utf8);
+            }
 
             if ((flags & SaveFlags.ChangePath) != 0)
                 resource.TakeOverPath(path);
@@ -74,14 +93,35 @@ namespace UniRes
                 (flags & SaveFlags.RelativePaths) != 0);
         }
 
-        /// <summary>Writes a resource as UTF-8 UniRes text to a stream. The stream is left open.</summary>
+        /// <summary>Returns the binary UniRes bytes for a resource.</summary>
+        public static byte[] SaveToBytes(Resource resource, SaveFlags flags = SaveFlags.None)
+        {
+            if (resource == null)
+                throw new ArgumentNullException(nameof(resource));
+
+            return ResourceBinaryWriter.Write(
+                resource,
+                "",
+                (flags & SaveFlags.BundleResources) != 0,
+                (flags & SaveFlags.RelativePaths) != 0);
+        }
+
+        /// <summary>Writes a resource as UTF-8 UniRes text or binary to a stream. The stream is left open.</summary>
         public static void SaveToStream(Resource resource, Stream stream, SaveFlags flags = SaveFlags.None)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
 
-            byte[] bytes = Utf8.GetBytes(SaveToString(resource, flags));
-            stream.Write(bytes, 0, bytes.Length);
+            if ((flags & SaveFlags.Binary) != 0)
+            {
+                byte[] bytes = SaveToBytes(resource, flags);
+                stream.Write(bytes, 0, bytes.Length);
+            }
+            else
+            {
+                byte[] bytes = Utf8.GetBytes(SaveToString(resource, flags));
+                stream.Write(bytes, 0, bytes.Length);
+            }
         }
     }
 }

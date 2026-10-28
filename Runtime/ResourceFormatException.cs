@@ -9,6 +9,11 @@ namespace UniRes
     /// </summary>
     public class ResourceFormatException : UniResException
     {
+        public ResourceFormatException(string message)
+            : base(message)
+        {
+        }
+
         public ResourceFormatException(string message, int line, int column)
             : base($"line {line}, column {column}: {message}")
         {
